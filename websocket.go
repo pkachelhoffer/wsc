@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/gorilla/websocket"
-	_ "github.com/gorilla/websocket"
 	"sync"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 type ConnectionStatus string
@@ -147,9 +147,10 @@ func (wsc *WebSocketConnection) setStatus(status ConnectionStatus) {
 
 	wsc.status = status
 
-	if status == ConnectionStatusConnected {
+	switch status {
+	case ConnectionStatusConnected:
 		wsc.log(LogTypeConnected, "connected")
-	} else if status == ConnectionStatusDisconnected {
+	case ConnectionStatusDisconnected:
 		wsc.log(LogTypeDisconnected, "disconnected")
 	}
 
@@ -166,7 +167,7 @@ func (wsc *WebSocketConnection) log(logType LogType, msg string) {
 }
 
 func runConnection(wsc *WebSocketConnection) error {
-	conn, _, err := websocket.DefaultDialer.Dial(wsc.url, nil)
+	conn, _, err := websocket.DefaultDialer.Dial(wsc.url, wsc.opts.Header)
 	if err != nil {
 		return err
 	}
@@ -183,8 +184,11 @@ func runConnection(wsc *WebSocketConnection) error {
 	readCh := make(chan []byte)
 	var (
 		readErr error
+		ctxErr  error
 		stop    bool
 	)
+
+	// Pass received messages onto read channel
 	go func() {
 		readErr = readMessages(conn, readCh)
 	}()
@@ -200,6 +204,11 @@ func runConnection(wsc *WebSocketConnection) error {
 			if wsc.opts.FnReceive != nil {
 				wsc.opts.FnReceive(bts)
 			}
+		case <-wsc.ctx.Done():
+			ctxErr = wsc.ctx.Err()
+			stop = true
+
+		case <-time.After(time.Millisecond * 100):
 		}
 
 		if stop {
@@ -207,7 +216,9 @@ func runConnection(wsc *WebSocketConnection) error {
 		}
 	}
 
-	if readErr != nil {
+	if ctxErr != nil {
+		return ctxErr
+	} else if readErr != nil {
 		return readErr
 	}
 

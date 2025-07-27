@@ -1,8 +1,13 @@
 package wsc
 
-import "time"
+import (
+	"net/http"
+	"time"
+)
 
 type Options struct {
+	Header http.Header
+
 	KeepAlive bool
 	Reconnect time.Duration
 	Backoff   time.Duration
@@ -43,5 +48,11 @@ func WithSendTimeout(td time.Duration) FnWithOption {
 func WithLogger(log FnLog) FnWithOption {
 	return func(opt *Options) {
 		opt.fnLog = log
+	}
+}
+
+func WithHeader(h http.Header) FnWithOption {
+	return func(opt *Options) {
+		opt.Header = h
 	}
 }
